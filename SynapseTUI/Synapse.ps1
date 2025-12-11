@@ -1,6 +1,6 @@
 clear-host
 $Host.UI.RawUI.WindowTitle = "Synapse"
-$script:SynapseVersion = "0.1 12/4/25"
+$script:SynapseVersion = "0.2 12/11/25"
 $script:psVer = $PSVersionTable.PSVersion.Major
 
 #KNOWN BUGS:
@@ -54,14 +54,15 @@ $gamesFolder = Join-Path -Path $contentsFolder -ChildPath "Games"
 $mindSweeperFolder = Join-Path -Path $gamesFolder -ChildPath "MineSweeper"
 $hangManFolder = Join-Path -Path $gamesFolder -ChildPath "Hangman"
 $blackJackFolder = Join-Path -Path $gamesFolder -ChildPath "BlackJack"
+$blockGameFunCool = Join-Path -Path $gamesFolder -ChildPath "blockGameFunCool" #i am adding this in at 3:40 AM, 12/10/25
 
 $data_Content = Get-Content -Path $data_Path -Raw
 $data_ContentRetrieve = $data_Content | ConvertFrom-Json
 
 $data_Name = $data_ContentRetrieve.Name
 $data_WeatherLocation = $data_ContentRetrieve.WeatherLocation
+$data_MusicLocation = $data_ContentRetrieve.MusicLocation
 $data_ThemeColor = $data_ContentRetrieve.ThemeColor
-$data_NotesStorage = $data_ContentRetrieve.NotesStorage
 if ([string]::IsNullOrEmpty($data_ThemeColor)) {
     $data_ThemeColor = "Blue"
 }
@@ -70,7 +71,8 @@ if ([string]::IsNullOrEmpty($data_ThemeColor)) {
 #$data_TOD = $data_ContentRetrieve.TimeOfDayLog
 
 $data_Miscell = $data_ContentRetrieve.MiscellaneousData
-$data_OpenAiKey = $data_Miscell.OpenAI_APIKey
+$data_MusicWidget = $data_Miscell.MusicWidget
+$data_QuotesWidget = $data_Miscell.QuotesWidget
 
 $data_Facts = $data_ContentRetrieve.Facts
 $factsList = $data_Facts | ForEach-Object { #runs for each object in $data_Quotes
@@ -84,8 +86,90 @@ $quotesList = $data_Quotes | ForEach-Object { #runs for each object in $data_Quo
 $randomQuote = $quotesList | Get-Random
 
 
+# Source - https://stackoverflow.com/a/71664664
+# Posted by widlov, modified by community. See post 'Timeline' for change history
+# Retrieved 2025-12-09, License - CC BY-SA 4.0
+function Format-Json {
+    <#
+    .SYNOPSIS
+        Prettifies JSON output.
+    .DESCRIPTION
+        Reformats a JSON string so the output looks better than what ConvertTo-Json outputs.
+    .PARAMETER Json
+        Required: [string] The JSON text to prettify.
+    .PARAMETER Minify
+        Optional: Returns the json string compressed.
+    .PARAMETER Indentation
+        Optional: The number of spaces (1..1024) to use for indentation. Defaults to 4.
+    .PARAMETER AsArray
+        Optional: If set, the output will be in the form of a string array, otherwise a single string is output.
+    .EXAMPLE
+        $json | ConvertTo-Json  | Format-Json -Indentation 2
+    #>
+    [CmdletBinding(DefaultParameterSetName = 'Prettify')]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+        [string]$Json,
+
+        [Parameter(ParameterSetName = 'Minify')]
+        [switch]$Minify,
+
+        [Parameter(ParameterSetName = 'Prettify')]
+        [ValidateRange(1, 1024)]
+        [int]$Indentation = 4,
+
+        [Parameter(ParameterSetName = 'Prettify')]
+        [switch]$AsArray
+    )
+
+    if ($PSCmdlet.ParameterSetName -eq 'Minify') {
+        return ($Json | ConvertFrom-Json) | ConvertTo-Json -Depth 100 -Compress
+    }
+
+    # If the input JSON text has been created with ConvertTo-Json -Compress
+    # then we first need to reconvert it without compression
+    if ($Json -notmatch '\r?\n') {
+        $Json = ($Json | ConvertFrom-Json) | ConvertTo-Json -Depth 100
+    }
+
+    $indent = 0
+    $regexUnlessQuoted = '(?=([^"]*"[^"]*")*[^"]*$)'
+
+    $result = $Json -split '\r?\n' |
+    ForEach-Object {
+        # If the line contains a ] or } character, 
+        # we need to decrement the indentation level, unless:
+        #   - it is inside quotes, AND
+        #   - it does not contain a [ or {
+        if (($_ -match "[}\]]$regexUnlessQuoted") -and ($_ -notmatch "[\{\[]$regexUnlessQuoted")) {
+            $indent = [Math]::Max($indent - $Indentation, 0)
+        }
+
+        # Replace all colon-space combinations by ": " unless it is inside quotes.
+        $line = (' ' * $indent) + ($_.TrimStart() -replace ":\s+$regexUnlessQuoted", ': ')
+
+        # If the line contains a [ or { character, 
+        # we need to increment the indentation level, unless:
+        #   - it is inside quotes, AND
+        #   - it does not contain a ] or }
+        if (($_ -match "[\{\[]$regexUnlessQuoted") -and ($_ -notmatch "[}\]]$regexUnlessQuoted")) {
+            $indent += $Indentation
+        }
+
+        $line
+    }
+
+    if ($AsArray) { return $result }
+    return $result -Join [Environment]::NewLine
+}
 
 
+# A Note - 12/11/25 5:28 AM
+#To anyone inspecting the source code: it is currently 4:42 AM on a thursday. i have a physical science test and 
+#tech science project (this project) due in a few hours. i know a lot of this music section seems like it was ai generated.
+
+#i coded createAudio, playAudio, pauseAudio, stopAudio, and most of music function. i will be honest, the rest of the music logic is very ai assisted
+#i dont have the time to code this on my own. i am sorry. i am regretful. i will do better after this. forgive me of my sins
 
 
 #audio playing logic
@@ -122,34 +206,236 @@ function playAudio {
     $audioObject.AudioPlayer.Play()
     $audioObject.State = "Playing"
 }
-#pause audio
+#pause and unpause audio 
 function pauseAudio {
     param($id)
     $audioObject = $Global:AudioPlayers[$id]
-    $audioObject.AudioPlayer.Pause()
-    $audioObject.State = "Stopped"
+    if ($null -eq $audioObject) { return }
+
+    if ($audioObject.State -eq 'Playing') {
+        $audioObject.AudioPlayer.Pause()
+        $audioObject.State = 'Paused'
+    }
+    elseif ($audioObject.State -eq 'Paused') {
+        $audioObject.AudioPlayer.Play()
+        $audioObject.State = 'Playing'
+    }
+    else {
+        $audioObject.AudioPlayer.Play()
+        $audioObject.State = 'Playing'
+    }
 }
 #stop audio 
 function stopAudio {
     param($id)
     $audioObject = $Global:AudioPlayers[$id]
+    if ($null -eq $audioObject) { return }
+    Unregister-Event -SourceIdentifier "AudioPlayer_$id" -ErrorAction SilentlyContinue
+    Remove-Event -SourceIdentifier "AudioPlayer_$id" -ErrorAction SilentlyContinue
     $audioObject.AudioPlayer.Stop()
     $audioObject.AudioPlayer.Close()
     $Global:AudioPlayers.Remove($id)
+}
+
+function createPlaylist {
+    param(
+        [string[]] $playlist,
+        [int] $startIndex = 0,
+        [double] $volume = 1.0
+    )
+    Add-Type -AssemblyName PresentationCore
+    $player = New-Object System.Windows.Media.MediaPlayer
+    $player.Volume = $volume
+
+    $id = (New-Guid).ToString()
+
+    $entry = [PSCustomObject]@{
+        Id           = $id
+        Playlist     = [System.Collections.ArrayList]$playlist
+        CurrentIndex = [int]$startIndex
+        AudioPlayer  = $player
+        State        = 'Stopped'
+        Path         = $playlist[$startIndex]
+    }
+
+    $Global:AudioPlayers[$id] = $entry
+
+    $player.Open([Uri]::new($entry.Path))
+
+    Register-ObjectEvent -InputObject $player -EventName MediaEnded -SourceIdentifier "AudioPlayer_$id" -Action {
+        $sender = $Event.Sender
+        $audio = $Global:AudioPlayers.Values | Where-Object { $_.AudioPlayer -eq $sender } | Select-Object -First 1
+        if ($null -eq $audio) { return }
+        $audio.CurrentIndex = $audio.CurrentIndex + 1
+        if ($audio.CurrentIndex -lt $audio.Playlist.Count) {
+            $nextPath = $audio.Playlist[$audio.CurrentIndex]
+            $audio.Path = $nextPath
+            $sender.Open([Uri]::new($nextPath))
+            $sender.Play()
+            $audio.State = 'Playing'
+        }
+        else {
+            $sender.Stop()
+            $sender.Close()
+            Unregister-Event -SourceIdentifier "AudioPlayer_$($audio.Id)" -ErrorAction SilentlyContinue
+            Remove-Event -SourceIdentifier "AudioPlayer_$($audio.Id)" -ErrorAction SilentlyContinue
+            $Global:AudioPlayers.Remove($audio.Id)
+        }
+    } | Out-Null
+
+    return $entry
 }
 
 #$kanye = createAudio -path "C:\Users\5223293797\Music\AsapRocky\AT.LONG.LAST.ASAP\09. Jukebox Joints (Feat. Joe Fox & Kanye West).mp3" -volume 1
 #playAudio -id $kanye.Id
 
 function music {
+    param(
+        [switch]$interactive
+    )
     Clear-Host
-    Write-Host "Music" -ForegroundColor $data_ThemeColor
+    Write-Host "Music" -ForegroundColor DarkRed
     Write-Host "______________________" -ForegroundColor Darkgray
+    Write-Host "Input format:     1st Peram: integer(DirectoryIndex)     2nd Peram: true/false or inspect (shuffle on/off OR inspect directory)" -ForegroundColor DarkGray
+    Write-Host "Example:          ('0 true', '0 inspect', '0 2')    " -ForegroundColor DarkGray -NoNewline; Write-Host "     pauseMusic - pauses music | " -ForegroundColor DarkGray -NoNewline; Write-Host "stopMusic - stops music completely" -ForegroundColor DarkGray
+    Write-Host "Music Directory:  $data_MusicLocation" -ForegroundColor DarkGray
+    Write-Host ""
+
+    if (-not (Test-Path $data_MusicLocation)) {
+        Write-Host "You do not have a music folder set up in Synapse"
+        Write-Host "Try typing 'setEdit' and adding one into settings"
+        Write-Host ":("
+        handleMainInput
+    }
+
+    function getDirectoriesWithAudio($path) {
+        $result = @()
+        $directories = Get-ChildItem $path -Directory
+        foreach ($direc in $directories) {
+            $audioFiles = Get-ChildItem $direc.FullName -File | Where-Object { $_.Extension -match '\.(mp3|wav|ogg|m4a|flac|aac|wma|alac|aiff|ape)$' }
+            if ($audioFiles.Count -gt 0) {
+                $result += $direc
+            }
+            else {
+                $result += getDirectoriesWithAudio $direc.FullName
+            }
+        }
+        return $result
+    }
+
+    $directoriesWithAudio = getDirectoriesWithAudio $data_MusicLocation
+
+    if ($directoriesWithAudio.Count -eq 0) {
+        Write-Host "No folders with music found."
+        Write-Host "Try adding music into folders inside your music directory"
+        Write-Host ":("
+        handleMainInput
+    }
+
+    for ($i = 0; $i -lt $directoriesWithAudio.Count; $i++) {
+        Write-Host "$($i): $($directoriesWithAudio[$i].Name)"
+    }
+
+    if (-not $interactive) {
+        Write-Host "Type 'mi' or 'musicInput' to choose a folder or inspect tracks" -ForegroundColor DarkGray
+        handleMainInput
+    }
+
+    Write-Host ""
+    $choiceInput = Read-Host "What would you like to listen to?"
+    if ($choiceInput -and $choiceInput.Trim().ToLower() -eq 'quit') { handleMainInput }
+    $parts = $choiceInput -split '\s+' | Where-Object { $_ -ne '' }
+    if ($parts.Count -lt 1 -or ($parts[0] -notmatch '^\d+$')) {
+        Write-Host "Invalid" -ForegroundColor DarkRed
+        handleMainInput
+    }
+
+    $dirIndex = [int]$parts[0]
+    if ($dirIndex -lt 0 -or $dirIndex -ge $directoriesWithAudio.Count) {
+        Write-Host "Index out of range" -ForegroundColor DarkRed
+        handleMainInput
+    }
+
+    $selectedChoice = $directoriesWithAudio[$dirIndex].FullName
+    $audioFiles = Get-ChildItem $selectedChoice -File | Where-Object { $_.Extension -match '\.(mp3|wav|ogg|m4a|flac|aac|wma|alac|aiff|ape)$' }
+
+    if ($audioFiles.Count -eq 0) {
+        Write-Host "No audio files in that folder" -ForegroundColor DarkGray
+        handleMainInput
+    }
+
+    $arg = if ($parts.Count -gt 1) { $parts[1] } else { $null }
+
+    if ($arg -and $arg -ieq 'inspect') {
+        for ($j = 0; $j -lt $audioFiles.Count; $j++) {
+            Write-Host "$($j): $($audioFiles[$j].Name)"
+        }
+        $fileChoice = Read-Host "Select an index to play"
+        if ($fileChoice -and $fileChoice.Trim().ToLower() -eq 'quit') { handleMainInput }
+        if ($fileChoice -match '^\d+$') {
+            $fi = [int]$fileChoice
+            if ($fi -ge 0 -and $fi -lt $audioFiles.Count) {
+                if ($Global:AudioPlayers.Count -gt 0) { @($Global:AudioPlayers.Keys) | ForEach-Object { stopAudio $_ } }
+                $paths = @($audioFiles[$fi].FullName)
+                $audio = createPlaylist -playlist $paths -startIndex 0 -volume 1.0
+                $audio.AudioPlayer.Play()
+                $audio.State = 'Playing'
+                Write-Host "Playing: $($audioFiles[$fi].Name)"
+            }
+        }
+        handleMainInput
+    }
+
+    if ($arg -and ($arg -ieq 'true' -or $arg -ieq 'false')) {
+        $shuffleChoice = $arg -ieq 'true'
+        if ($shuffleChoice) { $audioFiles = $audioFiles | Get-Random -Count $audioFiles.Count }
+
+        Write-Host ""
+        Write-Host "Playing from: $($directoriesWithAudio[$dirIndex].Name)"
+        if ($Global:AudioPlayers.Count -gt 0) { @($Global:AudioPlayers.Keys) | ForEach-Object { stopAudio $_ } }
+        $paths = $audioFiles | ForEach-Object { $_.FullName }
+        $audio = createPlaylist -playlist $paths -startIndex 0 -volume 1.0
+        $audio.AudioPlayer.Play()
+        $audio.State = 'Playing'
+        Write-Host "Playing: $($audioFiles[0].Name)"
+        Write-Host "________________________________________" -ForegroundColor Darkgray
+        return
+    }
+
+    if ($arg -and ($arg -match '^\d+$')) {
+        $fileIdx = [int]$arg
+        if ($fileIdx -ge 0 -and $fileIdx -lt $audioFiles.Count) {
+            if ($Global:AudioPlayers.Count -gt 0) { @($Global:AudioPlayers.Keys) | ForEach-Object { stopAudio $_ } }
+            $paths = @($audioFiles[$fileIdx].FullName)
+            $audio = createPlaylist -playlist $paths -startIndex 0 -volume 1.0
+            $audio.AudioPlayer.Play()
+            $audio.State = 'Playing'
+            Write-Host "Playing: $($audioFiles[$fileIdx].Name)"
+            Write-Host "________________________________________" -ForegroundColor Darkgray
+            return
+        }
+        else {
+            Write-Host "File index out of range" -ForegroundColor DarkRed
+            handleMainInput
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Playing from: $($directoriesWithAudio[$dirIndex].Name)"
+    if ($Global:AudioPlayers.Count -gt 0) { @($Global:AudioPlayers.Keys) | ForEach-Object { stopAudio $_ } }
+    $paths = $audioFiles | ForEach-Object { $_.FullName }
+    $audio = createPlaylist -playlist $paths -startIndex 0 -volume 1.0
+    $audio.AudioPlayer.Play()
+    $audio.State = 'Playing'
+    Write-Host "Playing: $($audioFiles[0].Name)"
 
     Write-Host "________________________________________" -ForegroundColor Darkgray
-    
-
 }
+
+
+
+
+
 
 
 
@@ -165,16 +451,16 @@ function greeting {
         $script:todaysDate = Get-Date
         $script:clockTime = (Get-Date -Format "HHmmss" ) -as [int]
         if ($clocktime -le 120000) {
-            write-host "Good morning, $data_Name, it is $todaysDate" -ForegroundColor $data_ThemeColor
+            write-host "Good morning, $data_Name, it is $todaysDate" -ForegroundColor $data_ThemeColor -NoNewline
         }
         elseif (($clockTime -ge 120001) -and ($clockTime -le 170000)) {
-            write-host "Good afternoon, $data_Name, it is $todaysDate" -ForegroundColor $data_ThemeColor
+            write-host "Good afternoon, $data_Name, it is $todaysDate" -ForegroundColor $data_ThemeColor -NoNewline
         }
         elseif (($clockTime -ge 170001) -and ($clockTime -le 190000)) {
-            write-host "Good evening, $data_Name, it is $todaysDate" -ForegroundColor $data_ThemeColor
+            write-host "Good evening, $data_Name, it is $todaysDate" -ForegroundColor $data_ThemeColor -NoNewline
         }
         elseif (($clockTime -ge 190001) -and ($clockTime -lt 235959)) {
-            write-host "Greetings, $data_Name, its a nice night on $todaysDate" -ForegroundColor $data_ThemeColor
+            write-host "Greetings, $data_Name, its a nice night on $todaysDate" -ForegroundColor $data_ThemeColor -NoNewline
         }
     }
     #if user has no name set in data, use this
@@ -182,16 +468,16 @@ function greeting {
         $todaysDate = Get-Date
         $clockTime = (Get-Date -Format "HHmmss" ) -as [int]
         if ($clocktime -le 120000) {
-            write-host "Good morning, it is $todaysDate" -ForegroundColor $data_ThemeColor
+            write-host "Good morning, it is $todaysDate" -ForegroundColor $data_ThemeColor -NoNewline
         }
         elseif (($clockTime -ge 120001) -and ($clockTime -le 170000)) {
-            write-host "Good afternoon, it is $todaysDate" -ForegroundColor $data_ThemeColor
+            write-host "Good afternoon, it is $todaysDate" -ForegroundColor $data_ThemeColor -NoNewline
         }
-        elseif (($clockTime -ge 170001) -and ($clockTime -le 190000)) {
-            write-host "Good evening, it is $todaysDate" -ForegroundColor $data_ThemeColor
+        elseif (($clockTime -ge 170001) -and ($clockTime -le 190000)) { 
+            write-host "Good evening, it is $todaysDate" -ForegroundColor $data_ThemeColor -NoNewline
         }
         elseif (($clockTime -ge 190001) -and ($clockTime -lt 235959)) {
-            write-host "Greetings, it is a nice night on $todaysDate" -ForegroundColor $data_ThemeColor
+            write-host "Greetings, it is a nice night on $todaysDate" -ForegroundColor $data_ThemeColor -NoNewline
         }
     }
 
@@ -210,19 +496,23 @@ function games {
     Write-Host "______________________" -ForegroundColor Darkgray
     Write-Host "        GAMES"          -ForegroundColor $data_ThemeColor
     Write-Host ""
-    Write-Host "Mind Sweeper: " -ForegroundColor $data_ThemeColor
-    Write-Host "ms " -ForegroundColor White -NoNewline; write-host "OR " -Foregroundcolor Darkgray -NoNewLine; Write-Host "minesweeper" -ForegroundColor White -NoNewline; Write-Host " - opens a window to play mine-sweeper made in powershell" -ForegroundColor DarkGray
-    Write-Host "Made by: " -ForegroundColor DarkGray -NoNewLine; Write-Host "jbMVS" -ForegroundColor $data_ThemeColor
+    Write-Host "Minesweeper: " -ForegroundColor $data_ThemeColor
+    Write-Host "ms" -ForegroundColor White -NoNewline; write-host "/" -Foregroundcolor Darkgray -NoNewLine; Write-Host "minesweeper" -ForegroundColor White -NoNewline; Write-Host " - opens a window to play mine-sweeper made in powershell" -ForegroundColor DarkGray
+    Write-Host "Made by: " -ForegroundColor DarkGray -NoNewLine; Write-Host "jbMVS" 
     Write-Host "Github source: https://github.com/jbMVS/Buttonsweeper" -ForegroundColor DarkGray
     write-host ""
     Write-Host "Hangman: " -ForegroundColor $data_ThemeColor
-    Write-Host "hm " -ForegroundColor White -NoNewline; write-host "OR " -Foregroundcolor Darkgray -NoNewLine; Write-Host "hangman" -ForegroundColor White -NoNewline; Write-Host " - runs hangman made from powershell within Synapse" -ForegroundColor DarkGray
-    Write-Host "Made by: " -ForegroundColor DarkGray -NoNewLine; Write-Host "smithcbp" -ForegroundColor $data_ThemeColor
+    Write-Host "hm" -ForegroundColor White -NoNewline; write-host "/" -Foregroundcolor Darkgray -NoNewLine; Write-Host "hangman" -ForegroundColor White -NoNewline; Write-Host " - runs hangman made from powershell within Synapse" -ForegroundColor DarkGray
+    Write-Host "Made by: " -ForegroundColor DarkGray -NoNewLine; Write-Host "smithcbp" 
     Write-Host "Github source: https://github.com/smithcbp/Powershell-Hangman" -ForegroundColor DarkGray
     write-host ""
     Write-Host "Blackjack: " -ForegroundColor $data_ThemeColor
-    Write-Host "bj " -ForegroundColor White -NoNewline; write-host "OR " -Foregroundcolor Darkgray -NoNewLine; Write-Host "blackjack" -ForegroundColor White -NoNewline; Write-Host " - runs blackjack made from powershell within Synapse" -ForegroundColor DarkGray
-    Write-Host "Made by: " -ForegroundColor DarkGray -NoNewLine; Write-Host "ThyCitrus" -ForegroundColor $data_ThemeColor
+    Write-Host "bj" -ForegroundColor White -NoNewline; write-host "/" -Foregroundcolor Darkgray -NoNewLine; Write-Host "blackjack" -ForegroundColor White -NoNewline; Write-Host " - runs blackjack made from powershell within Synapse" -ForegroundColor DarkGray
+    Write-Host "Made by: " -ForegroundColor DarkGray -NoNewLine; Write-Host "ThyCitrus" 
+    write-host ""
+    Write-Host "blockGameFunCool: " -ForegroundColor $data_ThemeColor
+    Write-Host "blockgameFunCool" -ForegroundColor White -NoNewline; Write-Host " - runs the coolest game ever made" -ForegroundColor DarkGray
+    Write-Host "Made by: " -ForegroundColor DarkGray -NoNewLine; Write-Host "Water890909" 
 
     Write-Host ""
     Write-Host "________________________________________" -ForegroundColor Darkgray
@@ -244,7 +534,7 @@ function gamesMS {
     $test = Test-Path -Path $file
     if (-not $test) {
         Write-Host 'MindSweeper does not exist. You may have deleted the "Games" folder, or the "ButtonSweeper.ps1" file'
-        Write-Host "You can recover by redownloading at: github.com or sum"
+        Write-Host "You can recover by redownloading at"
         handleMainInput
     }
     else {
@@ -257,7 +547,7 @@ function hangman {
     $test = Test-Path -Path $file
     if (-not $test) {
         Write-Host 'Hangman does not exist. You may have deleted the "Games" folder, or the "Hangman.ps1" file'
-        Write-Host "You can recover by redownloading at: github.com or sum"
+        Write-Host "You can recover by redownloading at"
         handleMainInput
     }
     else {
@@ -271,13 +561,27 @@ function blackjack {
     $test = Test-Path -Path $file
     if (-not $test) {
         Write-Host 'Blackjack does not exist. You may have deleted the "Games" folder, or the "Blackjack.ps1" file'
-        Write-Host "You can recover by redownloading at: github.com or sum"
+        Write-Host "You can recover by redownloading at"
         handleMainInput
     }
     else {
         & $file 2>$null #idk why this works just go look at https://stackoverflow.com/questions/8388650/powershell-how-can-i-stop-errors-from-being-displayed-in-a-script
         callMainFunction -functionName $script:lastMainFunctionCalled
     }
+}
+
+function blockGameFunCool {
+    $file = Join-Path -Path $blockGameFunCool -ChildPath "pygameTest.exe"
+    $test = Test-Path -Path $file
+    if (-not $test) {
+        Write-Host 'It is better this doesnt work for you. (Yes, there is something wrong, but ignore it)'
+        handleMainInput
+    }
+    else {
+        & $file 2>$null #idk why this works just go look at https://stackoverflow.com/questions/8388650/powershell-how-can-i-stop-errors-from-being-displayed-in-a-script
+        callMainFunction -functionName $script:lastMainFunctionCalled
+    }
+
 }
 
 #the cube
@@ -336,6 +640,44 @@ function displayWeather {
     }
 }
 
+function backup {
+    #this was made a few weeks into learnign powershell, may be bad
+    $StorageLocation = $data_ContentRetrieve.StorageLocation
+    $BackupLocationsRaw = $data_ContentRetrieve.BackupLocations
+
+    $BackupLocations = $BackupLocationsRaw | ForEach-Object { #runs for each object in $data_Quotes
+        $_.PSObject.Properties | ForEach-Object { $_.Value }  #find value property of each object
+    }
+    Write-Host ""
+    Write-Host "Backup locations: " -NoNewline; Write-Host $BackupLocations -ForegroundColor DarkGray
+    Write-Host "Storage location: " -NoNewline; Write-Host $StorageLocation -ForegroundColor DarkGray
+
+    try {
+        $BackupName = "Backup $(Get-Date -Format "yyyy-MM-dd  HH-mm")"
+
+        foreach ($Location in $BackupLocations) {
+            #every path in the txt file (?)
+            Write-Host "Backing up $($Location)" -ForegroundColor DarkGray
+            $LeadingPath = "$($Location.Replace(':',''))" #this is to copy root directory, without it, the folder your backing up wont be copied (only contents)
+            if (-not (Test-Path $StorageLocation\$BackupName\$LeadingPath)) {
+                #checks if a folder with the backup name esists
+                New-Item -Path "$StorageLocation\$BackupName\$LeadingPath" -ItemType Directory
+            }
+            Get-ChildItem -path $Location | Copy-Item -Destination "$StorageLocation/$BackupName\$LeadingPath" -Container -Recurse 
+            #LINE ABOVE: Recurse copies the folders in in folder and all their stuff, Container preserves directory structure
+        }
+
+        #Compress-Archive -Path "$StorageLocation\$BackupName" -DestinationPath "$StorageLocation\$BackupName.zip" -CompressionLevel Fastest
+        #COMPRESSING DOESNT WORK FOR SOME REASON
+
+    }
+    catch {
+        Write-Host "Something is wrong with your Backup settings. Try adding in paths to your settings, or redownloading the SynData file."
+        Write-Host ":("
+
+    }
+}
+
 
 function displayModules {
     Write-Host '- Use: "Install-Module MODULENAME" to install a module' -ForegroundColor DarkGray
@@ -349,25 +691,83 @@ function displayModules {
 }
 
 
+
+
+#NOTES MODULE
 function displayNotes {
     Clear-Host 
-    Write-Host "Notes"
-    Write-Host "______________________" -ForegroundColor Darkgray
-    Write-Host "________________________________________" -ForegroundColor Darkgray
+    Write-Host "Notes" -ForegroundColor $data_ThemeColor
+    Write-Host 'Cmd to write note:' -ForegroundColor DarkGray -NoNewline; write-host ' writeNote "TITLE" "NOTE CONTENT"'
+    Write-Host 'Cmd to delete note:' -ForegroundColor DarkGray -NoNewline; write-host ' deleteNote 1   (replace 1 with note number you want to delete)'
+    $data_PathDN = Join-Path -Path $contentsFolder -ChildPath "SynData.json"
+    $data_ContentDN = Get-Content -Path $data_PathDN -Raw
+    $data_ContentRetrieveDN = $data_ContentDN | ConvertFrom-Json
+    $data_Notes = $data_ContentRetrieveDN.NotesStorage
+
+    $index = 0
+    $data_Notes | ForEach-Object {
+        Write-Host "_____________________________________________" -ForegroundColor Darkgray; Write-Host $index; Write-Host ""
+        $_.PSObject.Properties | ForEach-Object { $_.Value }
+        Write-Host $_.Value
+        $index = $index + 1
+    }
 }
 
 function writeNote {
     param (
-        $text = ""
+        [Parameter(Mandatory = $true, Position = 0)]
+        $NoteName,
+        [Parameter(Mandatory = $true, Position = 1)]
+        $NoteContent 
     )
-    Write-Host "na"
-    Read-host "q"
-    $noteIndex = [int]$data_NotesStorage.NoteIndex
-    $updatedIndex = ($noteIndex + 1) | ConvertTo-Json -Depth 100
-    $data_Content.NotesStorage.NoteIndex = $updatedIndex
-    Set-Content -Path $data_Content -Value $updatedIndex
 
+    $Note = [PSCustomObject]@{
+        Name    = $NoteName
+        Content = $NoteContent
+    }
+
+    $data_PathWN = Join-Path -Path $contentsFolder -ChildPath "SynData.json"
+    $data_ContentWN = Get-Content -Path $data_PathWN -Raw
+    $data_ContentRetrieveWN = $data_ContentWN | ConvertFrom-Json
+
+    $data_ContentRetrieveWN.NotesStorage = @($data_ContentRetrieveWN.NotesStorage) + $Note
+    $update = $data_ContentRetrieveWN 
+    ConvertTo-Json $update | Format-Json | Set-Content -Path $data_Path
+
+    if ($script:lastMainFunctionCalled -eq "displayNotes") {
+        callMainFunction -functionName "displayNotes"
+    }
 }
+
+function deleteNote {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [int]$indexNumber
+    )
+
+    $data_PathDN = Join-Path -Path $contentsFolder -ChildPath "SynData.json"
+    $data_ContentDN = Get-Content -Path $data_PathDN -Raw
+    $data_ContentRetrieveDN = $data_ContentDN | ConvertFrom-Json
+    [System.Collections.ArrayList]$notesList = $data_ContentRetrieveDN.NotesStorage
+    $data_ContentRetrieveDN.NotesStorage = $notesList
+
+    if ($indexNumber -lt $notesList.Count) {
+        $notesList.RemoveAt($indexNumber)
+    }
+    else {
+        Write-Host "Index does not exist"
+    }
+    $update = $data_ContentRetrieveDN
+
+    ConvertTo-Json $update | Format-Json | Set-Content -Path $data_PathDN
+
+    if ($script:lastMainFunctionCalled -eq "displayNotes") {
+        callMainFunction -functionName "displayNotes"
+    }
+}
+
+
+
 
 
 #display description, synapse setup, and commands
@@ -379,7 +779,7 @@ function help {
     Write-Host ""
     Write-Host "Synapse:" -ForegroundColor $data_ThemeColor
     Write-Host "Synapse is a TUI (Terminal User Interface) programmed in Windows PowerShell." -ForegroundColor Darkgray
-    Write-Host "It serves utilities such as timers, alarms, stopwatch, to-do lists, music player, and even games." -ForegroundColor Darkgray
+    Write-Host "It serves as a platform in Powershell, allowing you to utilize it while also serving features from Synapse to enhance your experience." -ForegroundColor Darkgray
     write-host ""
     write-host ""
 
@@ -395,7 +795,7 @@ function help {
     Write-Host "Tips:" -ForegroundColor $data_ThemeColor
     Write-Host "- You can use your up and down keys to go to previous commands you typed" -ForegroundColor Darkgray
     Write-Host "- You can use Powershell cmdlets in Synapse" -ForegroundColor Darkgray
-    Write-Host "- If you are missing a Synapse component (find from diagnostics), try redownloading and replacing your copy from: githublink/.com" -ForegroundColor Darkgray
+    Write-Host "- If you are missing a Synapse component (find from diagnostics), try redownloading" -ForegroundColor Darkgray; Write-Host "  and replacing your copy from: https://github.com/water890909/Synapse" -ForegroundColor DarkGray
     Write-Host "________________________________________" -ForegroundColor Darkgray
     Write-Host ""
     write-host ""
@@ -410,32 +810,43 @@ function help {
     Write-Host "- opens Synapse (can be used to refresh Synapse too)" -ForegroundColor DarkGray
     Write-Host "home " -NoNewLine 
     Write-Host "- opens the main menu" -ForegroundColor DarkGray
-    Write-Host "set " -NoNewLine
-    Write-Host "OR" -NoNewLine -ForegroundColor DarkGray
-    Write-Host " settings " -NoNewLine
-    Write-Host "- opens settings" -ForegroundColor DarkGray
     Write-Host "help " -NoNewLine
     Write-Host "- opens the help page" -ForegroundColor DarkGray
+    Write-Host "set" -NoNewLine
+    Write-Host "/" -NoNewLine -ForegroundColor DarkGray
+    Write-Host "settings " -NoNewLine
+    Write-Host "- opens settings" -ForegroundColor DarkGray
+    Write-Host "bu" -NoNewLine
+    Write-Host "/" -NoNewLine -ForegroundColor DarkGray
+    Write-Host "backup " -NoNewLine
+    Write-Host "- backs up your desired directories and files" -ForegroundColor DarkGray
     Write-Host "dx" -NoNewLine
-    Write-Host " OR" -NoNewLine -ForegroundColor DarkGray
+    Write-Host "/" -NoNewLine -ForegroundColor DarkGray
     Write-Host " diagnostics " -NoNewLine
     Write-Host "- displays synapse diagnostics" -ForegroundColor DarkGray
     Write-Host "re" -NoNewLine
-    Write-Host " OR" -NoNewLine -ForegroundColor DarkGray
-    Write-Host " refresh " -NoNewLine
+    Write-Host "/" -NoNewLine -ForegroundColor DarkGray
+    Write-Host "refresh " -NoNewLine
     Write-Host "- clear the terminal" -ForegroundColor DarkGray
+    Write-Host "notes " -NoNewline; Write-Host "- displays your recorded notes" -ForegroundColor DarkGray
+    Write-Host "writeNote " -NoNewline; Write-Host '- allows you to record a note to notes: writeNote "title" "note"' -ForegroundColor DarkGray
+    Write-Host "deleteNote " -NoNewline; Write-Host "- allows you to delete note by index: deleteNote 0" -ForegroundColor DarkGray
     Write-Host "quit " -NoNewLine
     Write-Host "- close synapse" -ForegroundColor DarkGray
     Write-Host ""
     write-host ""
     Write-Host "Miscellaneous:" -ForegroundColor $data_ThemeColor
-    Write-Host "mod " -NoNewline
+    Write-Host "mods " -NoNewline
     Write-Host "- lists interesting PS modules to enhance Powershell (can be used in Synapse)" -ForegroundColor DarkGray
     Write-Host "games " -NoNewLine
     Write-Host "- shows commands and info for games in Synapse" -ForegroundColor DarkGray
+    Write-Host "music" -NoNewline; Write-Host " - displays music from your music location" -ForegroundColor DarkGray
+    Write-Host "mi" -NoNewline; Write-Host "/" -NoNewline -ForegroundColor DarkGray; Write-Host "musicInput" -NoNewline; Write-Host " - allows you to type input WHILE IN music player" -ForegroundColor DarkGray
+    Write-Host "pauseMusic" -NoNewline; Write-Host " - pauses music playing from music player" -ForegroundColor DarkGray
+    Write-Host "stopMusic" -NoNewline; Write-Host " - stops music that is playing from music player" -ForegroundColor DarkGray
     Write-Host "wx" -NoNewLine
-    Write-Host " OR" -NoNewLine -ForegroundColor DarkGray
-    Write-Host " weather " -NoNewLine
+    Write-Host "/" -NoNewLine -ForegroundColor DarkGray
+    Write-Host "weather " -NoNewLine
     Write-Host '- shows the weather forecast' -ForegroundColor DarkGray
     Write-Host "cube " -NoNewLine
     Write-Host '- displays a 3D spinning cube, "esc" to leave' -ForegroundColor DarkGray
@@ -452,6 +863,13 @@ function help {
 
 function settings {
     Clear-Host
+    $StorageLocation = $data_ContentRetrieve.StorageLocation
+    $BackupLocationsRaw = $data_ContentRetrieve.BackupLocations
+    $BackupLocations = $BackupLocationsRaw | ForEach-Object { #runs for each object in $data_Quotes
+        $_.PSObject.Properties | ForEach-Object { $_.Value }  #find value property of each object
+    }
+
+
     Write-Host "Settings" -ForegroundColor $data_ThemeColor
     Write-Host "______________________" -ForegroundColor Darkgray
     Write-Host "      OVERVIEW" -ForegroundColor $data_ThemeColor
@@ -501,10 +919,24 @@ function settings {
     Write-Host ""
 
 
+    Write-Host "MusicLocation" -ForegroundColor White
+    Write-Host '- Make a folder that contains other folders with audio files in them, and then put the path of the main folder into MusicLocation' -ForegroundColor DarkGray
+    Write-Host ""
+
+
     Write-Host "Weather:" -ForegroundColor White
     Write-Host '- To have the weather command show your specific location, type in the name of your city. If there is a space, use "_". Ex: "Havelock"' -ForegroundColor DarkGray
     Write-Host '- If you want to ensure it is specific to your state, you can add it in with a "+" and then the state abbreviation. Ex: "Havelock+NC"' -ForegroundColor DarkGray 
     Write-Host '- Some cities can be abbreviated, for example: New York City -> NYC | This would be valid and provide weather for NYC' -ForegroundColor DarkGray
+    Write-Host ""
+
+
+    Write-Host "BackupLocations & StorageLocation:" -ForegroundColor White
+    Write-Host '- For backup locations, simply provide the path to the file or directory (folder) you want to back up into a Location# slot' -ForegroundColor DarkGray
+    Write-Host '- To make multiple paths, make another section in BackupLocations called Location followed by the next number, and do it for each one you want' -ForegroundColor DarkGray
+    Write-Host '- For StorageLocation, simply find or make a folder you want the backups to be saved to, copy the path, and put it into StorageLocation' -ForegroundColor DarkGray
+    Write-Host '- NOTE: all "\" symbols must be double in the paths, so adjust them to be "\\", and do NOT make empty backup locations' -ForegroundColor DarkGray
+
     
     Write-Host "________________________________________" -ForegroundColor Darkgray
     Write-Host ""
@@ -513,8 +945,9 @@ function settings {
     Write-Host ""
     Write-Host "Name: " -NoNewLine; Write-Host $data_Name -ForegroundColor $data_ThemeColor
     Write-Host "ThemeColor: " -NoNewLine; Write-Host $data_ThemeColor -ForegroundColor $data_ThemeColor
+    Write-Host "MusicLocation: " -NoNewline; Write-Host $data_MusicLocation -ForegroundColor $data_ThemeColor
     Write-Host "WeatherLocation: " -NoNewLine; Write-Host $data_WeatherLocation -ForegroundColor $data_ThemeColor
-    Write-Host "OpenAI_APIKey: " -NoNewLine; Write-Host $data_OpenAiKey -ForegroundColor $data_ThemeColor
+    Write-Host "BackupLocations: " -NoNewline; Write-Host $BackupLocations -ForegroundColor $data_ThemeColor; Write-Host "StorageLocation " -NoNewline; Write-Host $StorageLocation -ForegroundColor $data_ThemeColor
     Write-Host "________________________________________" -ForegroundColor Darkgray
     handleMainInput
 
@@ -528,7 +961,7 @@ function printDiagnostics {
     Write-Host ""
     Write-Host "Synapse Diagnostics:" -ForegroundColor White
     Write-Host " -If a part does not exist, it may have either been deleted, or moved from its correct path" -ForegroundColor DarkGray
-    Write-Host " -You can redownload parts, or the entirety of Synapse from: githublink" -ForegroundColor DarkGray
+    Write-Host " -You can redownload parts, or the entirety of Synapse from" -ForegroundColor DarkGray
 
     Write-Host "Synapse Path: " -NoNewLine; Write-Host $PSCommandPath -ForegroundColor DarkGray
 
@@ -632,9 +1065,11 @@ function handleMainInput {
             "help" { callMainFunction -functionName "help" }
             "source" { callMainFunction -functionName "displaySourceCode" }
             "cube" { TC; continue }
-            "mod" { displayModules; continue }
+            "mods" { displayModules; continue }
             "dx" { printDiagnostics; continue }; "diagnostics" { printDiagnostics; continue }
             "wx" { callMainFunction -functionName "displayWeather" }; "weather" { callMainFunction -functionName "displayWeather" }
+            "bu" { backup; continue }; "backup" { backup; continue }
+            "notes" { callMainFunction -functionName "displayNotes" }
             "games" { callMainFunction -functionName "games" }
             "ms" { gamesMS; continue }; "minesweeper" { gamesMS; continue }
             "hm" { hangman; continue }; "hangman" { hangman; continue }
@@ -642,7 +1077,32 @@ function handleMainInput {
             "fact" { $factsList | Get-Random; continue }
             "re" { callMainFunction -functionName $script:lastMainFunctionCalled }
             "refresh" { callMainFunction -functionName $script:lastMainFunctionCalled }
-            "quit" { exit }
+            "quit" {
+                if ($Global:AudioPlayers.Count -gt 0) {
+                    @($Global:AudioPlayers.Keys) | ForEach-Object { stopAudio $_ }
+                }
+                exit
+            }
+            "music" { callMainFunction -functionname "music" }
+            "mi" { music -interactive } "musicInput" { music -interactive }
+            "pauseMusic" {
+                if ($Global:AudioPlayers.Count -gt 0) {
+                    @($Global:AudioPlayers.Keys) | ForEach-Object { pauseAudio $_ }
+                }
+                else {
+                    Write-Host "No audio playing" -ForegroundColor DarkGray
+                }
+                continue
+            }
+            "stopMusic" {
+                if ($Global:AudioPlayers.Count -gt 0) {
+                    @($Global:AudioPlayers.Keys) | ForEach-Object { stopAudio $_ }
+                }
+                else {
+                    Write-Host "No audio playing" -ForegroundColor DarkGray
+                }
+                continue
+            }
             default {
                 #try is so if Get-Command breaks, handleMainInput can still run after
                 $psCommand = try { Get-Command $cmdName -ErrorAction Stop; $true } catch { $false }
@@ -676,8 +1136,20 @@ function home {
     clear-host
     #first print greeting
     greeting
+    if ($data_MusicWidget -eq $true) {
+        Write-Host "    |" -ForegroundColor DarkGray -NoNewline; Write-Host "   Music:" -ForegroundColor DarkRed -NoNewline
+        if ($Global:AudioPlayers.Count -gt 0) {
+            foreach ($ap in $Global:AudioPlayers.Values) {
+                $track = [System.IO.Path]::GetFileName($ap.Path)
+                Write-Host " - $track" -ForegroundColor DarkRed -NoNewline
+            }
+        }
+    }
     #second print cool quote
-    Write-Host $randomQuote -ForegroundColor DarkGray
+    Write-Host ""
+    if ($data_MusicWidget -eq $true) {
+        Write-Host $randomQuote -ForegroundColor DarkGray
+    }
     #third make the thing that handles input
     handleMainInput
 }
