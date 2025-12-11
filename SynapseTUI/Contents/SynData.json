@@ -1,22 +1,32 @@
 {
-    "Name": "你好",
-
-    "ThemeColor": "DarkGreen",
-
+    "Name": "Ethan Edward Evans",
+    "ThemeColor": "Blue",
     "WeatherLocation": "Havelock+NC",
-
-    "MusicFolder": "C:\\Users\\scljd\\Music",
-
-    "NotesStorage": {
-        "NoteIndex": 0
+    "MusicLocation": "C:\\Users\\5223293797\\Music\\Music",
+    "BackupLocations": {
+        "Location1": "C:\\Users\\5223293797\\Downloads\\SynapseTUI"
     },
-
+    "StorageLocation": "C:\\Coding\\PowerShell\\PROJECTS\\SynapseTUI\\Contents\\Backups",
+    "NotesStorage": [
+        {
+            "Name": "OPEN_API_KEY",
+            "Content": "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"
+        },
+        {
+            "Name": "test",
+            "Content": "test"
+        },
+        {
+            "Name": "test",
+            "Content": "test"
+        }
+    ],
     "MiscellaneousData": {
-        "OpenAI_APIKey": ""
+        "MusicWidget": true,
+        "QuotesWidget": true
     },
-
     "Quotes": {
-        "Quote0": "I got paid $1 to advertise this, go play The Archive from AuxGames: https://drive.google.com/drive/folders/1vDpP9XDPHqtb6zj_bFHoDnOz916O9tly?usp=drive_link",
+        "Quote0": "I got paid $1 to advertise this, go play The Archive from AuxGames:\n https://drive.google.com/drive/folders/1vDpP9XDPHqtb6zj_bFHoDnOz916O9tly?usp=drive_link",
         "Quote1": "\"When you are content to be simply yourself and don't compare or compete, everyone will respect you.\" \n --Lao Tzu, c. 400 BC",
         "Quote2": "\"If you look for perfection, you'll never be content.\" \n --Leo Tolstoy, 1878",
         "Quote3": "\"Do not go where the path may lead, go instead where there is no path and leave a trail.\" \n --Ralph Waldo Emerson, c. 1870s",
@@ -45,7 +55,7 @@
         "Quote26": "\"One cannot step twice in the same river.\" \n --Heraclitus, c. 500 BC",
         "Quote27": "\"Time is a created thing. To say 'I don't have time' is like saying 'I don't want to.'\" \n --Lao Tzu, c. 400 BC",
         "Quote28": "\"We are what we pretend to be, so we must be careful about what we pretend to be.\" \n --Kurt Vonnegut, 1961",
-        "Quote29": "\"When you have lost hope, and you feel that you can no longer keep going, know that you will find your way out of what your are in.\n It may take time, but the suffering will end eventually. Keep going.\" \n --Water890909 (hi), 2025",
+        "Quote29": "\"When you have lost hope, and you feel that you can no longer keep going, know that you will find your way out of what your are in.\n It may take time, but the suffering will end eventually. Keep going.\" \n",
         "Quote30": "\"The journey of a thousand miles begins with a single step.\" \n --Lao Tzu, c. 400 BC",
         "Quote31": "\"Be yourself; everyone else is already taken.\" \n --Oscar Wilde, (Undated)",
         "Quote32": "\"The future belongs to those who believe in the beauty of their dreams.\" \n --Eleanor Roosevelt, 1960",
@@ -58,7 +68,6 @@
         "Quote39": "\"Darkness cannot drive out darkness; only light can do that. Hate cannot drive out hate; only love can do that.\" \n --Martin Luther King Jr., 1957",
         "Quote40": "\"To be, or not to be: that is the question.\" \n --William Shakespeare, c. 1600"
     },
-
     "Facts": {
         "Fact1": "As of 2025, an estimated 402.74 million terabytes (402.74 trillion gigabytes) of data is generated globally every day, which accounts to about 4,773,214,838 GB/s a second.",
         "Fact2": "On average, a person blinks around 15-20 times per minute, totaling up to 28,800 times in a day.",
@@ -161,5 +170,4 @@
         "Fact99": "The fastest chemical reaction measured occurs in femtoseconds --- a millionth of a billionth of a second.",
         "Fact100": "Space is not completely empty; it contains sparse atoms, plasma, cosmic rays, and dark matter."
     }
-
 }
