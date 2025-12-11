@@ -1,15 +1,19 @@
-Syn0.1 | 11/25/25
-Synapse is a TUI (Terminal User Interface) programmed in Windows's Powershell. 
-It serves utilities such as .. (THIS PAGE IS UNFINISHED)
+Synapse:
+Synapse is a TUI (Terminal User Interface) programmed in Windows PowerShell.
+It serves as a platform in Powershell, allowing you to utilize it while also serving features from Synapse to enhance your experience.
 
 
+Synapse Set-up:
+1: To set up Synapse, open PowerShell and type:
+      notepad $PROFILE
+   This will open or create a file called Microsoft.PowerShell_profile.
+2: In the profile file, insert this code (replace the path with your Synapse path):
+      New-Alias -Name syn -Value "C:\PATH\TO\Synapse.ps1"
+3: Restart PowerShell. You can now open Synapse by typing the command "syn".
 
-SET-UP:
-1: To setup Synapse, open Powershell, and type: notepad $PROFILE
-   This will create a file called: Microsoft.Powershell_profile
-   Create the file if it is not already created (a prompt will come up asking you if you want to)
 
-2: In the Profile text file, insert this code: New-Alias -Name syn -Value "C:PATH\TO\Synapse.ps1"
-   Replace the path with your actual path to Synapse
-
-3: Finally, restart Powershell (close and open back up). You can open Synapse by typing the command "syn" into Powershell.
+Tips:
+- You can use your up and down keys to go to previous commands you typed
+- You can use Powershell cmdlets in Synapse
+- If you are missing a Synapse component (find from diagnostics), try redownloading
+  and replacing your copy from: https://github.com/water890909/Synapse
