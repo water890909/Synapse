@@ -8,7 +8,12 @@ Synapse Set-up:
       notepad $PROFILE
    This will open or create a file called Microsoft.PowerShell_profile.
 2: In the profile file, insert this code (replace the path with your Synapse path):
+
       New-Alias -Name syn -Value "C:\PATH\TO\Synapse.ps1"
+
+       IF an error shows up, try running this, and then the code again:
+      New-Item -Path (Split-Path -Parent $PROFILE) -ItemType Directory -Force
+
 3: Restart PowerShell. You can now open Synapse by typing the command "syn".
 
 
