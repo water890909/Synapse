@@ -1,24 +1,16 @@
 {
-    "Name": "Ethan Edward Evans",
+    "Name": "User",
     "ThemeColor": "Blue",
     "WeatherLocation": "Havelock+NC",
-    "MusicLocation": "C:\\Users\\5223293797\\Music\\Music",
+    "MusicLocation": "C:Path\\To\\Music",
     "BackupLocations": {
-        "Location1": "C:\\Users\\5223293797\\Downloads\\SynapseTUI"
+        "Location1": "C:\\Path\\To\\BackupFile"
     },
-    "StorageLocation": "C:\\Coding\\PowerShell\\PROJECTS\\SynapseTUI\\Contents\\Backups",
+    "StorageLocation": "C:\\Path\\To\\StorageLocation",
     "NotesStorage": [
         {
-            "Name": "OPEN_API_KEY",
-            "Content": "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"
-        },
-        {
-            "Name": "test",
-            "Content": "test"
-        },
-        {
-            "Name": "test",
-            "Content": "test"
+            "Name": "Note:",
+            "Content": "Hello, this is a note"
         }
     ],
     "MiscellaneousData": {
