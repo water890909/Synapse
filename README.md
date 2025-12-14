@@ -14,7 +14,9 @@ Synapse Set-up:
        IF an error shows up, try running this, and then the code again:
       New-Item -Path (Split-Path -Parent $PROFILE) -ItemType Directory -Force
 
-3: Restart PowerShell. You can now open Synapse by typing the command "syn".
+3: You may need to run this command on your Synapse folder:
+      Get-ChildItem "C:\PATH\TO\SYNAPSE" -Recurse | Unblock-File
+   Then, restart PowerShell. You can now open Synapse by typing the command "syn".
 
 
 Tips:
